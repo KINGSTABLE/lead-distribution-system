@@ -1,0 +1,68 @@
+// Prisma schema for Mini Lead Distribution System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Provider {
+  id             Int    @id @default(autoincrement())
+  name           String
+  serviceIds     Int[]  @map("service_ids")
+  monthlyQuota   Int    @default(10) @map("monthly_quota")
+  leadsThisMonth Int    @default(0) @map("leads_this_month")
+
+  assignments LeadAssignment[]
+
+  @@map("providers")
+}
+
+model Lead {
+  id          Int      @id @default(autoincrement())
+  name        String
+  phone       String
+  city        String
+  serviceType Int      @map("service_type")
+  description String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  assignments LeadAssignment[]
+
+  // Same phone cannot submit same service twice
+  @@unique([phone, serviceType])
+  @@map("leads")
+}
+
+model LeadAssignment {
+  id         Int      @id @default(autoincrement())
+  leadId     Int      @map("lead_id")
+  providerId Int      @map("provider_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  provider Provider @relation(fields: [providerId], references: [id])
+
+  @@map("lead_assignments")
+}
+
+// Persists round-robin state per service across restarts
+model AllocationState {
+  serviceType Int @id @map("service_type")
+  poolIndex   Int @default(0) @map("pool_index")
+
+  @@map("allocation_state")
+}
+
+// Ensures webhook idempotency — duplicate event IDs are ignored
+model WebhookEvent {
+  id          String   @id // client-supplied event ID
+  payload     Json
+  status      String   @default("processed")
+  processedAt DateTime @default(now()) @map("processed_at")
+
+  @@map("webhook_events")
+}
