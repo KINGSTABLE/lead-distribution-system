@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { Navbar } from '@/components/Navbar'
 
+export const runtime = 'edge'
+
 export const metadata: Metadata = {
   title: 'Prowider — Lead Distribution System',
   description: 'Real-time mini lead distribution platform for Book My Packers',

@@ -1,17 +1,14 @@
-import { PrismaClient } from '@prisma/client'
+import { getRequestContext } from '@cloudflare/next-on-pages'
+import { drizzle } from 'drizzle-orm/d1'
+import * as schema from './schema'
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __prisma: PrismaClient | undefined
+/**
+ * Returns a Drizzle client bound to the D1 database for this request.
+ * Must be called inside an Edge Runtime request handler.
+ */
+export function getDB() {
+  const { env } = getRequestContext<{ Bindings: CloudflareEnv }>()
+  return drizzle(env.DB, { schema })
 }
 
-// Singleton pattern prevents exhausting DB connections in dev hot-reload
-export const prisma =
-  global.__prisma ??
-  new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
-  })
-
-if (process.env.NODE_ENV !== 'production') {
-  global.__prisma = prisma
-}
+export type DB = ReturnType<typeof getDB>

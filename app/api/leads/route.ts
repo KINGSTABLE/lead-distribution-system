@@ -1,19 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { eq } from 'drizzle-orm'
+import { getDB } from '@/lib/db'
+import { leads, leadAssignments, providers } from '@/lib/schema'
 import { createLeadWithAllocation, SERVICE_NAMES } from '@/lib/allocation'
-import { prisma } from '@/lib/db'
-import { Prisma } from '@prisma/client'
+
+export const runtime = 'edge'
 
 export async function GET() {
-  const leads = await prisma.lead.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: 100,
-    include: {
-      assignments: {
-        include: { provider: { select: { id: true, name: true } } },
-      },
-    },
-  })
-  return NextResponse.json(leads)
+  const db = getDB()
+  const rows = await db.select().from(leads).orderBy(leads.createdAt)
+  return NextResponse.json(rows)
 }
 
 export async function POST(req: NextRequest) {
@@ -30,7 +26,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid service type' }, { status: 400 })
     }
 
-    const { lead, providerIds } = await createLeadWithAllocation({
+    const db = getDB()
+    const { leadId, providerIds } = await createLeadWithAllocation(db, {
       name: String(name).trim(),
       phone: String(phone).trim(),
       city: String(city).trim(),
@@ -41,31 +38,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        lead: {
-          id: lead.id,
-          name: lead.name,
-          phone: lead.phone,
-          city: lead.city,
-          serviceType: lead.serviceType,
-          serviceName: SERVICE_NAMES[lead.serviceType],
-          description: lead.description,
-          createdAt: lead.createdAt,
-        },
+        lead: { id: leadId, serviceType: svcNum, serviceName: SERVICE_NAMES[svcNum] },
         assignedProviders: providerIds,
-        message: `Lead created and assigned to ${providerIds.length} provider(s).`,
+        message: `Lead #${leadId} assigned to ${providerIds.length} provider(s).`,
       },
       { status: 201 }
     )
   } catch (err: unknown) {
-    // Unique constraint violation = duplicate lead
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    const msg = err instanceof Error ? err.message : String(err)
+    // SQLite unique constraint violation
+    if (msg.includes('UNIQUE constraint failed') || msg.includes('unique')) {
       return NextResponse.json(
         { error: 'A lead for this phone number and service already exists.' },
         { status: 409 }
       )
     }
-    if (err instanceof Error && err.message.includes('No providers available')) {
-      return NextResponse.json({ error: err.message }, { status: 503 })
+    if (msg.includes('No providers available')) {
+      return NextResponse.json({ error: msg }, { status: 503 })
     }
     console.error('[POST /api/leads]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

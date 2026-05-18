@@ -1,15 +1,37 @@
 import { NextRequest } from 'next/server'
-import { prisma } from '@/lib/db'
+import { getDB } from '@/lib/db'
+import { providers, leads } from '@/lib/schema'
 
-export const dynamic = 'force-dynamic'
+export const runtime = 'edge'
+export const dynamic  = 'force-dynamic'
 
 /**
- * Server-Sent Events endpoint for real-time dashboard updates.
- * Polls the DB every 3 s and pushes diffs to connected clients.
+ * Server-Sent Events stream for real-time dashboard updates.
+ * Polls D1 every 3 s and pushes the latest snapshot to connected clients.
  */
 export async function GET(req: NextRequest) {
   const encoder = new TextEncoder()
-  let closed = false
+  let closed    = false
+
+  const getSnapshot = async () => {
+    const db = getDB()
+    const [allProviders, recentLeads] = await Promise.all([
+      db.select({
+        id:             providers.id,
+        name:           providers.name,
+        monthlyQuota:   providers.monthlyQuota,
+        leadsThisMonth: providers.leadsThisMonth,
+      }).from(providers).orderBy(providers.id),
+      db.select({
+        id:          leads.id,
+        name:        leads.name,
+        city:        leads.city,
+        serviceType: leads.serviceType,
+        createdAt:   leads.createdAt,
+      }).from(leads).orderBy(leads.createdAt).limit(5),
+    ])
+    return { providers: allProviders, recentLeads, ts: Date.now() }
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -17,69 +39,30 @@ export async function GET(req: NextRequest) {
         if (closed) return
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
-        } catch {}
+        } catch { /* client disconnected */ }
       }
 
-      // Send initial snapshot immediately
-      const initial = await getSnapshot()
-      send({ type: 'snapshot', ...initial })
+      send({ type: 'snapshot', ...await getSnapshot() })
 
-      // Poll every 3 seconds
       const interval = setInterval(async () => {
-        if (closed) {
-          clearInterval(interval)
-          return
-        }
-        try {
-          const snapshot = await getSnapshot()
-          send({ type: 'update', ...snapshot })
-        } catch (err) {
-          console.error('[SSE poll]', err)
-        }
+        if (closed) { clearInterval(interval); return }
+        try { send({ type: 'update', ...await getSnapshot() }) } catch { /* ignore */ }
       }, 3000)
 
-      // Clean up when client disconnects
       req.signal.addEventListener('abort', () => {
         closed = true
         clearInterval(interval)
-        controller.close()
+        try { controller.close() } catch { /* already closed */ }
       })
     },
   })
 
   return new Response(stream, {
     headers: {
-      'Content-Type': 'text/event-stream',
+      'Content-Type':  'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
+      'Connection':    'keep-alive',
       'X-Accel-Buffering': 'no',
     },
   })
-}
-
-async function getSnapshot() {
-  const [providers, recentLeads] = await Promise.all([
-    prisma.provider.findMany({
-      orderBy: { id: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        monthlyQuota: true,
-        leadsThisMonth: true,
-      },
-    }),
-    prisma.lead.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      select: {
-        id: true,
-        name: true,
-        city: true,
-        serviceType: true,
-        createdAt: true,
-      },
-    }),
-  ])
-
-  return { providers, recentLeads, ts: Date.now() }
 }

@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
-import { Prisma } from '@prisma/client'
+import { eq } from 'drizzle-orm'
+import { getDB } from '@/lib/db'
+import { webhookEvents, leads, leadAssignments, providers } from '@/lib/schema'
+
+export const runtime = 'edge'
 
 /**
- * Webhook endpoint with idempotency guarantee.
+ * Idempotent webhook receiver.
  *
- * Callers MUST supply a unique `event_id` in the request body.
- * Duplicate event_ids are detected via a UNIQUE constraint on
- * webhook_events.id and return 200 without re-processing.
+ * Each call must include a unique `event_id`. The ID is stored in the
+ * webhook_events table which has a PRIMARY KEY (UNIQUE) on `id`.
+ * Duplicate event IDs cause a SQLite constraint error, caught here and
+ * returned as { status: "already_processed" } with HTTP 200.
  */
 export async function POST(req: NextRequest) {
-  // Parse body once upfront so the catch block can reference it
   let body: { event_id?: string; event_type?: string; payload?: Record<string, unknown> } = {}
   try {
     body = await req.json()
@@ -20,54 +23,43 @@ export async function POST(req: NextRequest) {
 
   const { event_id, event_type, payload } = body
 
+  if (!event_id || typeof event_id !== 'string') {
+    return NextResponse.json({ error: 'event_id is required' }, { status: 400 })
+  }
+  if (!event_type || typeof event_type !== 'string') {
+    return NextResponse.json({ error: 'event_type is required' }, { status: 400 })
+  }
+
+  const db = getDB()
+
   try {
-
-    if (!event_id || typeof event_id !== 'string') {
-      return NextResponse.json({ error: 'event_id is required' }, { status: 400 })
-    }
-
-    if (!event_type || typeof event_type !== 'string') {
-      return NextResponse.json({ error: 'event_type is required' }, { status: 400 })
-    }
-
-    // Attempt to insert the event — unique constraint prevents duplicates
-    await prisma.webhookEvent.create({
-      data: {
-        id: event_id,
-        payload: { event_type, ...(payload ?? {}) } as Prisma.InputJsonValue,
-        status: 'processed',
-      },
+    // Insert first — unique constraint rejects duplicates
+    await db.insert(webhookEvents).values({
+      id:          event_id,
+      payload:     JSON.stringify({ event_type, ...(payload ?? {}) }),
+      status:      'processed',
+      processedAt: new Date(),
     })
 
-    // ── Process the event ────────────────────────────────────────────────────
+    // Process the event
     let result: Record<string, unknown> = {}
-
-    if (event_type === 'lead.created') {
-      const leadId = payload?.lead_id
-      if (leadId) {
-        const lead = await prisma.lead.findUnique({
-          where: { id: Number(leadId) },
-          include: { assignments: { include: { provider: true } } },
-        })
-        result = { lead }
-      }
+    if (event_type === 'lead.created' && payload?.lead_id) {
+      const [lead] = await db
+        .select()
+        .from(leads)
+        .where(eq(leads.id, Number(payload.lead_id)))
+      result = { lead: lead ?? null }
     }
 
-    return NextResponse.json({
-      success: true,
-      event_id,
-      event_type,
-      status: 'processed',
-      result,
-    })
+    return NextResponse.json({ success: true, event_id, event_type, status: 'processed', result })
   } catch (err: unknown) {
-    // Unique constraint violation = duplicate event_id → idempotent 200
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('UNIQUE constraint failed') || msg.includes('unique')) {
       return NextResponse.json({
-        success: true,
+        success:  true,
         event_id: body.event_id,
-        status: 'already_processed',
-        message: 'Duplicate event — skipped.',
+        status:   'already_processed',
+        message:  'Duplicate event — skipped.',
       })
     }
     console.error('[POST /api/webhooks]', err)
@@ -76,9 +68,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  const events = await prisma.webhookEvent.findMany({
-    orderBy: { processedAt: 'desc' },
-    take: 50,
-  })
+  const db = getDB()
+  const events = await db
+    .select()
+    .from(webhookEvents)
+    .orderBy(webhookEvents.processedAt)
   return NextResponse.json(events)
 }

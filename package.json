@@ -4,29 +4,31 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "next build",
     "start": "next start",
+    "preview": "next build && wrangler pages dev",
     "lint": "next lint",
-    "db:push": "prisma db push",
-    "db:seed": "npx ts-node --project tsconfig.json prisma/seed.ts",
-    "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "deploy": "npm run build && wrangler pages deploy",
+    "cf-typegen": "wrangler types"
   },
   "dependencies": {
-    "@prisma/client": "^5.7.0",
+    "@cloudflare/next-on-pages": "^1.13.7",
+    "drizzle-orm": "^0.38.3",
     "lucide-react": "^0.303.0",
     "next": "14.0.4",
     "react": "^18",
     "react-dom": "^18"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
+    "drizzle-kit": "^0.30.1",
     "postcss": "^8",
-    "prisma": "^5.7.0",
     "tailwindcss": "^3.3.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^3.101.0"
   }
 }
