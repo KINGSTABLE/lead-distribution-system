@@ -10,9 +10,17 @@ import { Prisma } from '@prisma/client'
  * webhook_events.id and return 200 without re-processing.
  */
 export async function POST(req: NextRequest) {
+  // Parse body once upfront so the catch block can reference it
+  let body: { event_id?: string; event_type?: string; payload?: Record<string, unknown> } = {}
   try {
-    const body = await req.json()
-    const { event_id, event_type, payload } = body
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  const { event_id, event_type, payload } = body
+
+  try {
 
     if (!event_id || typeof event_id !== 'string') {
       return NextResponse.json({ error: 'event_id is required' }, { status: 400 })
@@ -55,10 +63,9 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     // Unique constraint violation = duplicate event_id → idempotent 200
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      const body = await req.json().catch(() => ({}))
       return NextResponse.json({
         success: true,
-        event_id: body?.event_id,
+        event_id: body.event_id,
         status: 'already_processed',
         message: 'Duplicate event — skipped.',
       })

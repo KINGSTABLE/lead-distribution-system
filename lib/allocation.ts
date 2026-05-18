@@ -70,7 +70,7 @@ export async function allocateProviders(
   const fairSlotsNeeded = FAIR_SLOTS[serviceType] ?? 0
 
   // 2. Get current quota data for all relevant providers
-  const allCandidateIds = [...new Set([...mandatory, ...pool])]
+  const allCandidateIds = Array.from(new Set([...mandatory, ...pool]))
   const providers = await tx.provider.findMany({
     where: { id: { in: allCandidateIds } },
     select: { id: true, leadsThisMonth: true, monthlyQuota: true },
