@@ -1,0 +1,18 @@
+{
+  "runtime": "edge",
+  "name": "api/test/bulk-leads",
+  "deploymentTarget": "v8-worker",
+  "entrypoint": "index.js",
+  "assets": [],
+  "framework": {
+    "slug": "nextjs",
+    "version": "15.3.2"
+  },
+  "environment": {
+    "__NEXT_BUILD_ID": "VZRij-nDFjVZgkBA0fRiR",
+    "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY": "hjkyqPVEG0Z20vAt7MIWw4p7oSZ+S8IV0/cljFdSr0E=",
+    "__NEXT_PREVIEW_MODE_ID": "ffaf71e54950a8c7692dfcd726e9751b",
+    "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "951a0eecc32510e6745e769935e0a28e24298d646e53cdc352daf84b49609da8",
+    "__NEXT_PREVIEW_MODE_SIGNING_KEY": "ef2a203a95f4e860d61b4e151b1b05ac96607793e59d4f6b20e0ccd99ebdf371"
+  }
+}

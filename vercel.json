@@ -1,8 +1,5 @@
 {
-  "buildCommand": "npx prisma generate && npx prisma db push && next build",
+  "buildCommand": "next build",
   "framework": "nextjs",
-  "regions": ["bom1"],
-  "env": {
-    "DATABASE_URL": "@database_url"
-  }
+  "regions": ["sin1"]
 }
