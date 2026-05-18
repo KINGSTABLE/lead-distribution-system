@@ -14,7 +14,7 @@ const NAMES    = ['Aarav Sharma','Diya Patel','Rohan Mehta','Priya Singh','Arjun
  * Cloudflare D1's write serialisation under concurrency.
  */
 export async function POST(req: NextRequest) {
-  const body  = await req.json().catch(() => ({}))
+  const body  = await req.json().catch(() => ({})) as Record<string, unknown>
   const count = Math.min(Number(body.count ?? 10), 20)
   const ts    = Date.now()
   const db    = getDB()

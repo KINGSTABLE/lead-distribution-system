@@ -14,7 +14,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
+    const body = await req.json() as Record<string, unknown>
     const { name, phone, city, serviceType, description } = body
 
     if (!name || !phone || !city || !serviceType || !description) {

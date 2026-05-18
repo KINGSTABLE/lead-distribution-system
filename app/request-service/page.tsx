@@ -35,14 +35,14 @@ export default function RequestServicePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, serviceType: Number(form.serviceType) }),
       })
-      const data = await res.json()
+      const data = await res.json() as { error?: string } & AssignmentResult
 
       if (!res.ok) {
-        setError(data.error || 'Something went wrong')
+        setError((data as { error?: string }).error || 'Something went wrong')
         return
       }
 
-      setResult(data)
+      setResult(data as AssignmentResult)
       setForm({ name: '', phone: '', city: '', serviceType: '', description: '' })
     } catch {
       setError('Network error. Please try again.')

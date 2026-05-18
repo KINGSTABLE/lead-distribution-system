@@ -50,7 +50,7 @@ export default function TestToolsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ count: bulkCount }),
     })
-    const data = await res.json()
+    const data = await res.json() as BulkResult
     setBulkResult(data)
     setBulking(false)
   }
@@ -68,7 +68,7 @@ export default function TestToolsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ event_id: id, event_type: 'lead.created', payload: parsedPayload }),
     })
-    const data = await res.json()
+    const data = await res.json() as WebhookResult
     setWebhookResults((prev) => [data, ...prev].slice(0, 5))
     setWebhookLoading(false)
   }
